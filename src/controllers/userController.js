@@ -1,6 +1,9 @@
 const bcrypt = require('bcryptjs');
 const User = require('../model/User');
 const jwt = require('jsonwebtoken');
+const RecordedSong = require('../model/RecordedSongs');
+const Comments = require('../model/Comments');
+const sequelize = require('../config/database');
 
 const register = async (req, res) => {
   const { username, email, password } = req.body;
@@ -66,7 +69,8 @@ const login = async (req, res) => {
       user:{
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        avatar_url: user.avatar_url
       }});
   } catch (error) {
     console.error('Lỗi trong quá trình đăng nhập:', error);
@@ -113,7 +117,7 @@ const userProfile = async (req, res)=>{
     }else{
       const userInfo = await User.findOne({
         where :{id: userId},
-        attributes: ["username", "email", "password", "phone", "date_of_birth", "gender"]
+        attributes: ["username", "email", "password", "phone", "date_of_birth", "gender", "avatar_url"]
       });
       if (!userInfo) {
         return res.status(404).json({ message: "Người dùng không tồn tại" }); // Nếu người dùng không tồn tại
@@ -167,6 +171,118 @@ const updateUser =async (req, res) => {
   }
 };
 
+
+const createRecordedSong = async(req, res) => {
+
+  try{
+  const user_id = req.user.id;
+  const{song_name, recording_path, title, status} = req.body;
+
+  if (!song_name || !recording_path || !title) {
+    return res.status(400).json({
+      message: 'Thiếu thông tin cần thiết (song_name, recording_path, !title)!',
+    });
+  }
+  const recordedSong = await RecordedSong.create({
+    user_id,
+    song_name,
+    recording_path,
+    title,
+    status: status || 'public', // Mặc định là public nếu không được gửi
+  });
+
+  return res.status(201).json(recordedSong);
+  }catch(error){
+    return res.status(500).json({
+      message: 'Lỗi khi đăng bài ghi âm!',
+      error: error.message,
+    });
+  }
+
+}
+
+const getRecordedSongList = async(req, res) => {
+  try{
+    const record = await RecordedSong.findAll({
+      attributes: [
+        "id",
+        "user_id",
+        "song_name",
+        "title",
+        "recording_path",
+        "upload_time",
+        "likes_count",
+        "status",
+        // Đếm số lượng bình luận cho bài hát cụ thể
+        [sequelize.literal(`(SELECT COUNT(*) FROM Comments WHERE Comments.song_id = RecordedSong.id)`), "comments_count"]
+    ],
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['user_id', 'username', 'avatar_url'] // Lấy thông tin user
+        }
+      ],
+    })
+    if (!record || record.length === 0) {
+      return res.status(404).json({ message: "Không có bản ghi nào" });
+  }
+    return res.status(200).json(record) 
+  }catch(error){
+    console.error("Lỗi lấy danh sách bài hát:", error);
+    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+
+}
+
+const CreateComment = async (req, res) =>{
+  try{
+      const user_id = req.user.id;
+      const {song_id, comment_text} = req.body;
+
+      if(!comment_text || !song_id){
+        return res.status(400).json({
+          message: 'Chưa bình luận',
+        });
+      }
+
+      const comment = await Comments.create({
+        user_id,
+        song_id,
+        comment_text
+      });
+      return res.status(201).json(comment);
+  }catch(error){
+    return res.status(500).json({
+      message: 'Lỗi khi comment',
+      error: error.message,
+    });
+  }
+}
+const getCommentList = async (req, res) =>{
+  try{
+      const song_id = req.params.song_id;
+      const comment = await Comments.findAll({
+        where: {song_id: song_id},
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['user_id', 'username', 'avatar_url'] // Lấy thông tin user
+          }
+        ],
+        order: [['comment_time', 'DESC']] // Sắp xếp theo thời gian mới nhất
+  });
+      return res.status(200).json(comment) 
+  }catch(error){
+    return res.status(500).json({
+      message: 'Lỗi lấy comment',
+      error: error.message,
+    });
+  }
+}
+
+
 module.exports = {
   register,
   login,
@@ -174,5 +290,9 @@ module.exports = {
   updateProfile,
   userProfile,
   getAllAccount,
-  updateUser
+  updateUser,
+  createRecordedSong,
+  getRecordedSongList,
+  CreateComment,
+  getCommentList,
 };
