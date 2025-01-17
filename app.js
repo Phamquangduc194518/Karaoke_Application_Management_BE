@@ -6,6 +6,7 @@ const cors = require('cors');
 const userRoutes = require('./src/routes/userRoutes');
 const adminRoutes = require('./src/routes/adminRoute');
 const songRoutes = require('./src/routes/songRoute');
+const liveStreamRoute = require('./src/routes/liveStreamRoute');
 const sequelize = require('./src/config/database');
 
 // Middleware
@@ -19,7 +20,7 @@ app.use('/api', userRoutes);
 app.use('/api/admin', adminRoutes);
 console.log('Admin routes loaded');
 app.use('/api/song',songRoutes);
-
+app.use('/api/liveStream',liveStreamRoute);
 sequelize
   .authenticate()
   .then(() => {
